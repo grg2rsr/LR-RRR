@@ -39,10 +39,6 @@ Kernels = generate_kernels(nKernels,kvec,spread=0)
 Weights = sp.ones((nEvents,1))
 asig, = generate_data(Kernels, Events, Weights, t_stop, noise=0.5)
 
-
-
-
-
 Seg = neo.core.Segment()
 Seg.analogsignals.append(asig)
 [Seg.events.append(event) for event in Events]
@@ -91,7 +87,8 @@ fig.subplots_adjust(top=0.85)
 
 for i in range(nKernels):
     axes[i].plot(Kernels.times,Kernels_pred[:,i],'C3',alpha=1)
-    
+
+fig.savefig('plots/lr_eta_recovered.png')
 """
 observe: kernels are very well recovered
 so far so good!
@@ -107,3 +104,26 @@ does each event have a base kernels that is somehow distributed?
 are these assumptions not necessary w rrr?
 """
 
+
+
+# %% plot X
+fig, axes = plt.subplots(figsize=[4,6])
+im = axes.matshow(X[:1500,:],cmap='gray_r',extent=(0,X.shape[1],0,30))
+axes.set_aspect('auto')
+fig.suptitle('regressor matrix X')
+fig.tight_layout()
+fig.subplots_adjust(top=0.85)
+fig.savefig('plots/LR-X.png',dpi=300)
+
+
+# %% plot B
+fig, axes = plt.subplots(figsize=[4,6])
+im = axes.matshow(B_hat,cmap='gray_r',extent=(0,X.shape[1],0,30))
+axes.set_aspect('auto')
+fig.suptitle('regressor matrix X')
+fig.tight_layout()
+fig.subplots_adjust(top=0.85)
+# fig.savefig('plots/LR-X.png',dpi=300)
+
+
+# %%

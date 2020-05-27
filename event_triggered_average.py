@@ -20,7 +20,7 @@ kvec = sp.arange(-2,2,dt) * pq.s
 
 t_stop = 5 * 60 * pq.s
 nEvents = 4
-rates = sp.ones(nEvents)*0.33*pq.Hz
+rates = sp.ones(nEvents)*0.2*pq.Hz
 Events = generate_events(nEvents, rates, t_stop) 
 
 nKernels = 4
@@ -34,7 +34,7 @@ fig, axes = plot_kernels(Kernels)
 fig.suptitle('Kernels')
 fig.tight_layout()
 fig.subplots_adjust(top=0.85)
-
+fig.savefig('plots/eta_kernels.png')
 # %% plot the simulated data
 fig, axes = plt.subplots(nrows=2, sharex=True, figsize=[6,4], gridspec_kw=dict(height_ratios=(0.2,1)))
 plot_events(Events,ax=axes[0])
@@ -46,6 +46,7 @@ axes[1].set_xlim(0,30)
 fig.suptitle('simulated data')
 sns.despine(fig)
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+fig.savefig('plots/eta_data.png')
 # %% event triggered average
 fig, axes = plt.subplots(ncols=nEvents,figsize=[6,2.5])
 t_slice = (-2,2) * pq.s
@@ -71,7 +72,7 @@ axes[0].set_ylabel('signal (au)')
 fig.suptitle('event triggered average')
 sns.despine(fig)
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-
+fig.savefig('plots/eta.png')
 
 
 """
@@ -99,10 +100,10 @@ make new event by merging two and time shifting it
 dt = 0.02
 kvec = sp.arange(-2,2,dt) * pq.s
 
-t_stop = 10 * 60 * pq.s
+t_stop = 5 * 60 * pq.s
 
 nEvents = 4
-rates = sp.ones(nEvents)*0.33*pq.Hz
+rates = sp.ones(nEvents)*0.2*pq.Hz
 Events = generate_events(nEvents, rates, t_stop)
 
 # last event contains 
@@ -119,6 +120,7 @@ fig, axes = plot_kernels(Kernels)
 fig.suptitle('Kernels')
 fig.tight_layout()
 fig.subplots_adjust(top=0.85)
+fig.savefig('plots/eta_kernel_problem.png')
 
 # %% plot the simulated data
 fig, axes = plt.subplots(nrows=2, sharex=True, figsize=[6,4], gridspec_kw=dict(height_ratios=(0.2,1)))
@@ -137,7 +139,7 @@ axes[1].set_xlim(0,30)
 for t in Events[-2].times:
     t = t.magnitude
     axes[0].plot([t,t+1],[nEvents-1,nEvents],':',color='k',zorder=-1,alpha=0.5,lw=1)
-
+fig.savefig('plots/eta_data_problem.png')
 # %% event triggered average
 fig, axes = plt.subplots(ncols=nEvents,figsize=[6,2.5])
 t_slice = (-2,2) * pq.s
@@ -163,3 +165,6 @@ axes[0].set_ylabel('signal (au)')
 fig.suptitle('event triggered average')
 sns.despine(fig)
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+fig.savefig('plots/eta_problem.png')
+
+# %%

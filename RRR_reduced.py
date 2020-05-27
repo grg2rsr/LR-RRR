@@ -7,18 +7,24 @@ import matplotlib as mpl
 import quantities as pq
 import elephant as ele
 from tqdm import tqdm
-mpl.rcParams['figure.dpi'] = 100
+mpl.rcParams['figure.dpi'] = 331
 import pandas as pd
 import seaborn as sns
 from data_generator import *
 from copy import copy
 from plotting_helpers import *
-
+"""
+30min 1hz 50 q10 c100
+11101?1?1??
+30min .2hz 50 q10 c100
+11?11?111??1
+30min .2hz 50 q10 c10
+?11
+"""
 # %%
 dt = 0.02
 kvec = sp.arange(-2,2,dt) * pq.s
-t_stop = 5*60 * pq.s
-# t_stop = 200 *pq.s
+t_stop = 30*60 * pq.s
 
 nEvents = 5
 rates = sp.ones(nEvents)*0.2*pq.Hz
@@ -33,12 +39,15 @@ Events = generate_events(nEvents, rates, t_stop)
 Events[-2] = Events[-1]
 
 nKernels = nEvents
-Kernels = generate_kernels(nKernels, kvec, normed=True, spread=1)
+Kernels = generate_kernels(nKernels, kvec, normed=True, spread=0.5)
 
-nUnits = 50
-q = 5
+nUnits = 100
+q = 10
 Weights = sp.rand(nEvents,nUnits)**q - sp.rand(nEvents,nUnits)**q * 0.5 # power for sparseness
-# Weights = sp.randn(nEvents,nUnits)
+# Weights = sp.load('W.npy')
+# Weights = sp.load('Wb200.npy')
+
+print("CC on this run: %2.2f"% sp.corrcoef(Weights[-1,:],Weights[-2,:])[0,1])
 
 Asigs = generate_data(Kernels, Events, Weights, t_stop, noise=0.5)
 
@@ -47,26 +56,27 @@ Seg = neo.core.Segment()
 [Seg.events.append(event) for event in Events[:-1]]
 nEvents = nEvents -1
 
-# # %% plot kernels
+# %% plot kernels
 # fig, axes = plot_kernels(Kernels)
 # fig.suptitle('Kernels')
 # fig.tight_layout()
 # fig.subplots_adjust(top=0.85)
 
 # %% plot kernels - both on last
-# fig, axes = plt.subplots(ncols=nKernels-1, figsize=[6,1.5])
-# for i in range(nKernels-1):
-#     axes[i].plot(Kernels.times,Kernels[:,i],color='C%i'%i)
-# axes[-1].plot(Kernels.times,Kernels[:,-1],color='C%i'%(nKernels-1))
+fig, axes = plt.subplots(ncols=nKernels-1, figsize=[6,1.5])
+for i in range(nKernels-1):
+    axes[i].plot(Kernels.times,Kernels[:,i],color='C%i'%i)
+axes[-1].plot(Kernels.times,Kernels[:,-1],color='C%i'%(nKernels-1))
 
-# for ax in axes:
-#     ax.axvline(0,linestyle=':',color='k',alpha=0.5)
-#     ax.set_xlabel('time (s)')
-# sns.despine(fig)
-# axes[0].set_ylabel('au')
-# fig.suptitle('Kernels')
-# fig.tight_layout()
-# fig.subplots_adjust(top=0.85)
+for ax in axes:
+    ax.axvline(0,linestyle=':',color='k',alpha=0.5)
+    ax.set_xlabel('time (s)')
+sns.despine(fig)
+axes[0].set_ylabel('au')
+fig.suptitle('Kernels')
+fig.tight_layout()
+fig.subplots_adjust(top=0.85)
+fig.savefig('plots/RRR_kernels.png')
 
 # %% plot the weights
 fig, axes = plt.subplots(figsize=[6,4])
@@ -75,25 +85,30 @@ fig.colorbar(mappable=im,shrink=0.5,label='au')
 axes.set_xlabel('to units')
 axes.set_ylabel('from kernels')
 axes.set_title('Weigths')
+axes.set_aspect('auto')
 axes.xaxis.set_ticks_position('bottom')
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+fig.savefig('plots/RRR_weights.png')
 
-# %% plot the simulated data
-fig, axes = plt.subplots(nrows=2, sharex=True, figsize=[6,4], gridspec_kw=dict(height_ratios=(0.2,1)))
-plot_events(Events,ax=axes[0])
-ysep = 4
-N = 10
-axes[0].set_ylabel('Events')
-for i, asig in enumerate(Asigs[:N]):
-    axes[1].plot(asig.times,asig.magnitude+i*ysep,'k',lw=1)
-axes[1].set_xlabel('time (s)')
-axes[1].set_ylabel('signal (au)')
-axes[1].set_yticks(sp.arange(N)*ysep)
-axes[1].set_yticklabels([])
-fig.suptitle('simulated data')
-sns.despine(fig)
-fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-axes[1].set_xlim(0,30)
+
+# # %% plot the simulated data
+# fig, axes = plt.subplots(nrows=2, sharex=True, figsize=[6,4], gridspec_kw=dict(height_ratios=(0.2,1)))
+# plot_events(Events,ax=axes[0])
+# ysep = 4
+# N = 10
+# axes[0].set_ylabel('Events')
+# for i, asig in enumerate(Asigs[:N]):
+#     axes[1].plot(asig.times,asig.magnitude+i*ysep,'k',lw=1)
+# axes[1].set_xlabel('time (s)')
+# axes[1].set_ylabel('signal (au)')
+# axes[1].set_yticks(sp.arange(N)*ysep)
+# axes[1].set_yticklabels([])
+# fig.suptitle('simulated data')
+# sns.despine(fig)
+# fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+# axes[1].set_xlim(0,30)
+# fig.savefig('plots/RRR_sim_data.png')
+
 
 """
  
@@ -140,8 +155,7 @@ print("Model Rss:", Rss)
 # fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 # axes[1].set_xlim(0,30)
 
-# %% plotting inferred kernels
-# both kernels in the last axes
+# # %% plotting inferred kernels
 # N = 10
 # kvec = Kernels.times
 # fig, axes = plt.subplots(figsize=[6,5], nrows=N,ncols=nEvents,sharex=True,sharey=True)
@@ -160,6 +174,7 @@ print("Model Rss:", Rss)
 # sns.despine(fig)
 # fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 # fig.subplots_adjust(hspace=0.1,wspace=0.1)
+# fig.savefig('plots/RRR_LM_pred_kernels.png')
 
 # %%
 """
@@ -199,9 +214,9 @@ Y_hat_lr = X @ B_hat_lr
 
 # normal linear model error
 # Y_hat = X @ B_hat
-e = Y_hat - Y
-Rss = sp.trace(e.T @ e)
-print("Model Rss:", Rss)
+# e = Y_hat - Y
+# Rss = sp.trace(e.T @ e)
+# print("Model Rss:", Rss)
 
 # normal linear model error
 e = Y_hat_lr - Y
@@ -290,15 +305,14 @@ so the Q is, what do we gain from now having L and W?
 # and forming from them "patterns"
 # -> candidate kernels
 l = copy(L[1:])
-
-# from sklearn.cluster import KMeans
-from sklearn.cluster import SpectralClustering
 nClusters = nEvents + 1 # nEvents+1
 # nClusters = r
 
+# from sklearn.cluster import KMeans
 # kmeans = KMeans(n_clusters=nClusters).fit(W.T)
 # labels = kmeans.labels_
 
+from sklearn.cluster import SpectralClustering
 specclust = SpectralClustering(n_clusters=nClusters, assign_labels='kmeans').fit(W.T)
 labels = specclust.labels_
 
@@ -312,12 +326,12 @@ for j in range(nClusters):
     for i in range(nEvents):
         candidate_kernels[:,i,j] = sp.average(splits[i],1) # the candidate kernel
 
-# %% plotting the clusters
+# # %% plotting the clusters
 # ratios = [sp.sum(labels == i)/len(labels) for i in range(nClusters)]
 # ratios.append(0.05)
 # g_kwargs = dict(width_ratios=ratios)
-# kwargs = dict(cmap='PiYG',vmin=-1,vmax=1)
-# fig, axes = plt.subplots(ncols=nClusters+1, gridspec_kw=g_kwargs)
+# kwargs = dict(cmap='PiYG',vmin=-0.5,vmax=0.5)
+# fig, axes = plt.subplots(figsize=[6,3],ncols=nClusters+1, gridspec_kw=g_kwargs)
 # for i in range(nClusters):
 #     im = axes[i].matshow(W[:,labels == i],**kwargs)
 #     axes[i].set_aspect('auto')
@@ -333,22 +347,72 @@ for j in range(nClusters):
 # fig.suptitle('W clusters')
 # fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 # fig.subplots_adjust(wspace=0.1)
+# fig.savefig('plots/RRR_clusters.png')
 
-# # %% plotting the combinations
-# fig, axes = plt.subplots(nrows=nClusters,ncols=nEvents,sharey=True,sharex=True)
-# fig.suptitle('patterns of summations')
-# for i in range(nEvents):
-#     for j in range(nClusters):
-#         axes[j,i].plot(kvec, candidate_kernels[:,i,j])
-#         # axes[j,i].plot(sp.average(splits[i],1),lw=2)
-#         # axes[j,i].plot(splits[i],color='k',alpha=.5,lw=.5)
+# %% plotting the combinations
+fig, axes = plt.subplots(nrows=nClusters,ncols=nEvents,sharey=True,sharex=True)
+fig.suptitle('patterns of summations')
+for i in range(nEvents):
+    for j in range(nClusters):
+        axes[j,i].plot(kvec, candidate_kernels[:,i,j])
+        # axes[j,i].plot(sp.average(splits[i],1),lw=2)
+        # axes[j,i].plot(splits[i],color='k',alpha=.5,lw=.5)
 
-# for ax in axes[-1,:]:
-#     ax.set_xlabel('time (s)')
-# sns.despine(fig)
-# plt.figtext(0.025,0.5,'rank',rotation='vertical')
-# fig.tight_layout(rect=[0.05, 0.03, 1, 0.95])
-# fig.subplots_adjust(hspace=0.1,wspace=0.1)
+for ax in axes[-1,:]:
+    ax.set_xlabel('time (s)')
+sns.despine(fig)
+plt.figtext(0.025,0.5,'rank',rotation='vertical')
+fig.tight_layout(rect=[0.05, 0.03, 1, 0.95])
+fig.subplots_adjust(hspace=0.1,wspace=0.1)
+fig.savefig('plots/RRR_combinations.png')
+
+"""
+ 
+    ###    ##       ######## ######## ########  ##    ##    ###    ######## #### ##     ## ########     ######  ########    ###    ########  ######## 
+   ## ##   ##          ##    ##       ##     ## ###   ##   ## ##      ##     ##  ##     ## ##          ##    ##    ##      ## ##   ##     ##    ##    
+  ##   ##  ##          ##    ##       ##     ## ####  ##  ##   ##     ##     ##  ##     ## ##          ##          ##     ##   ##  ##     ##    ##    
+ ##     ## ##          ##    ######   ########  ## ## ## ##     ##    ##     ##  ##     ## ######       ######     ##    ##     ## ########     ##    
+ ######### ##          ##    ##       ##   ##   ##  #### #########    ##     ##   ##   ##  ##                ##    ##    ######### ##   ##      ##    
+ ##     ## ##          ##    ##       ##    ##  ##   ### ##     ##    ##     ##    ## ##   ##          ##    ##    ##    ##     ## ##    ##     ##    
+ ##     ## ########    ##    ######## ##     ## ##    ## ##     ##    ##    ####    ###    ########     ######     ##    ##     ## ##     ##    ##    
+ 
+"""
+# %% 
+
+dt = 0.02
+tvec = sp.arange(0,t_stop.magnitude,dt) * pq.s
+dt = sp.diff(tvec)[0]
+
+nSamples = sp.rint((t_stop/dt).magnitude).astype('int32')
+signals_pred = sp.zeros((nSamples,nEvents*nClusters))
+
+m = 0
+for i in range(nEvents):
+    event = Events[i]
+    inds = times2inds(tvec, event.times)
+    binds = sp.zeros(tvec.shape)
+    binds[inds] = 1
+    for j in range(nClusters):
+        kernel = candidate_kernels[:,i,j].flatten()
+        signals_pred[:,m] = sp.convolve(binds,kernel,mode='same')
+        m += 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # %%
 """
@@ -377,7 +441,7 @@ for i in range(nEvents):
     for j in range(nClusters):
         if candidate_kernels[:,i,j].max() < sp.absolute(candidate_kernels[:,i,j]).max():
             candidate_kernels[:,i,j] *= -1
-        candidate_kernels[:,i,j] /= candidate_kernels[:,i,j].max()
+        # candidate_kernels[:,i,j] /= candidate_kernels[:,i,j].max()
 
 # %% get back the weight matrix
 
@@ -399,15 +463,46 @@ for i in range(nEvents):
         signals_pred[:,m] = sp.convolve(binds,kernel,mode='same')
         m += 1
 
-Weights_pred = sp.linalg.pinv(signals_pred) @ Y
-# plt.matshow(Weights_pred)
+chunks = 200
+sig_chunks = sp.split(signals_pred,chunks)
+Y_chunks = sp.split(Y,chunks)
+from tqdm import tqdm
+W_chunks = sp.zeros((nEvents*nClusters,nUnits,chunks))
 
+for i in tqdm(range(chunks)):
+    W_chunks[:,:,i] = sp.linalg.pinv(sig_chunks[i]) @ Y_chunks[i]
+
+Weights_pred = sp.average(W_chunks,2)
+# Weights_pred = sp.linalg.pinv(signals_pred) @ Y
+plt.matshow(Weights_pred)
+
+# %% combine top N
+# sds = sp.std(Weights_pred,axis=1)
+# v = sp.cumsum(sp.sort(sds)[::-1]) / sp.sum(sds)
+# top_n = sp.sum(v>0.95)
+
+# ix = []
+# for i in range(nEvents):
+#     for j in range(nClusters):
+#         ix.append((i,j))
+
+# ix = sp.array(ix)[sp.sort(sp.argsort(sds)[-top_n:])]
+
+# %% select top ranking ones
 sds = sp.std(Weights_pred,axis=1)
 ix = sp.argsort(sds)[-r:]
-Weights_pred_sel = Weights_pred[sp.sort(ix),:]
+ix = sp.sort(ix)
+
+# swap
+swap = False
+if swap:
+    ix_c = copy(ix)
+    ix[-2] = ix_c[-1]
+    ix[-1] = ix_c[-2]
+
+Weights_pred_sel = Weights_pred[ix,:]
 
 # %% select the r with the highest SD (or min - max?)
-
 fig, axes = plt.subplots(figsize=[5,4])
 axes.plot(sp.sort(sds)[::-1],'o')
 axes.axvline(r-.5,linestyle=':',color='k',alpha=0.5)
@@ -416,7 +511,6 @@ axes.set_xlabel('row')
 axes.set_ylabel('sd')
 sns.despine(fig)
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-
 
 # %% 
 g_kwargs = dict(width_ratios=(1,1,1,0.1))
@@ -436,43 +530,38 @@ for ax in axes[:-1]:
     ax.set_aspect('auto')
 axes[0].set_ylabel('from Kernel')
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+fig.savefig('plots/RRR_weights_pred.png')
 
+# %% get back which where the Kernels that were meaningful
+ix = []
+for i in range(nEvents):
+    for j in range(nClusters):
+        ix.append((i,j))
 
+ix = sp.array(ix)[sp.sort(sp.argsort(sds)[-r:])]
 
+Kernels_pred = []
 
+if swap:
+    ix_c = copy(ix)
+    ix[-2] = ix_c[-1]
+    ix[-1] = ix_c[-2]
 
+for i,j in ix:
+    Kernels_pred.append(candidate_kernels[:,i,j])
 
+Kernels_pred = sp.array(Kernels_pred).T
+nKernels_pred = Kernels_pred.shape[1]
 
-# # %% get back which where the Kernels that were meaningful
-# ix = []
-# for i in range(nEvents):
-#     for j in range(nClusters):
-#         ix.append((i,j))
+fig, axes = plt.subplots(ncols=nKernels_pred,sharey=True, figsize=[6,1.5])
+for i in range(nKernels_pred):
+    axes[i].plot(kvec, Kernels_pred[:,i], 'r')
+    axes[i].plot(kvec,Kernels[:,i],'k',lw=2)
 
-# ix = sp.array(ix)[sp.std(Weights_pred,axis=1) > sd,:]
-
-# Kernels_pred = []
-# for i,j in ix:
-#     Kernels_pred.append(candidate_kernels[:,i,j])
-
-# Kernels_pred = sp.array(Kernels_pred).T
-# nKernels_pred = Kernels_pred.shape[1]
-
-# fig, axes = plt.subplots(ncols=nKernels_pred,sharey=True, figsize=[6,1.5])
-# for i in range(nKernels_pred):
-#     axes[i].plot(kvec, Kernels_pred[:,i], 'r')
-#     axes[i].plot(kvec,Kernels[:,i],'k',lw=2)
-
-# fig.suptitle('predicted kernels')
-# fig.tight_layout()
-# fig.subplots_adjust(top=0.85)
+fig.suptitle('predicted kernels')
+fig.tight_layout()
+fig.subplots_adjust(top=0.85)
+fig.savefig('plots/RRR_pred_kern.png')
 
 
 # %%
-
-
-
-
-
-
-

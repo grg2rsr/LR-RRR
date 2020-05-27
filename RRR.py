@@ -20,7 +20,7 @@ kvec = sp.arange(-2,2,dt) * pq.s
 t_stop = 5*60 * pq.s
 
 nEvents = 4
-rates = sp.ones(nEvents)*0.33*pq.Hz
+rates = sp.ones(nEvents)*0.2*pq.Hz
 Events = generate_events(nEvents, rates, t_stop)
 
 # last event contains 
@@ -44,6 +44,7 @@ fig, axes = plot_kernels(Kernels)
 fig.suptitle('Kernels')
 fig.tight_layout()
 fig.subplots_adjust(top=0.85)
+fig.savefig('plots/rrr_kernels.png')
 
 # %% plot the weights
 fig, axes = plt.subplots(figsize=[6,4])
@@ -54,6 +55,7 @@ axes.set_ylabel('from kernels')
 axes.set_title('Weigths')
 axes.xaxis.set_ticks_position('bottom')
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+fig.savefig('plots/rrr_weights.png')
 
 # %% plot the simulated data
 fig, axes = plt.subplots(nrows=2, sharex=True, figsize=[6,4], gridspec_kw=dict(height_ratios=(0.2,1)))
@@ -71,6 +73,7 @@ fig.suptitle('simulated data')
 sns.despine(fig)
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 axes[1].set_xlim(0,30)
+fig.savefig('plots/rrr_data.png')
 
 """
  
@@ -195,7 +198,7 @@ ysep = 3
 N = 10
 axes[0].set_ylabel('Events')
 for i, asig in enumerate(Asigs[:N]):
-    axes[1].plot(asig.times,asig.magnitude+i*ysep,'k',lw=1)
+    axes[1].plot(asig.times,asig.magnitude+i*ysep,'k',lw=2)
     axes[1].plot(asig.times,Y_hat[:,i]+i*ysep,'C3',lw=1)
     axes[1].plot(asig.times,Y_hat_lr[:,i]+i*ysep,'C4',lw=1)
 
@@ -207,23 +210,25 @@ fig.suptitle('simulated data')
 sns.despine(fig)
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 axes[1].set_xlim(0,30)
+fig.savefig('plots/rrr_data_fig.png')
 
-# %% plot the simulated data
-fig, axes = plt.subplots(nrows=2, sharex=True, figsize=[6,4], gridspec_kw=dict(height_ratios=(0.2,1)))
-plot_events(Events,ax=axes[0])
-axes[0].set_ylabel('Events')
-N = 10
-for i, asig in enumerate(Asigs[:N]):
-    axes[1].plot(asig.times,asig.magnitude+i*ysep,'k',lw=2,alpha=0.8)
-    axes[1].plot(asig.times,Y_hat[:,i]+i*ysep,'C3',lw=1)
-    axes[1].plot(asig.times,Y_hat_lr[:,i]+i*ysep,'C4',lw=1)
 
-axes[1].set_xlabel('time (s)')
-axes[1].set_ylabel('signal (au)')
-fig.suptitle('simulated data')
-sns.despine(fig)
-fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-axes[1].set_xlim(0,60)
+# # %% plot the simulated data
+# fig, axes = plt.subplots(nrows=2, sharex=True, figsize=[6,4], gridspec_kw=dict(height_ratios=(0.2,1)))
+# plot_events(Events,ax=axes[0])
+# axes[0].set_ylabel('Events')
+# N = 10
+# for i, asig in enumerate(Asigs[:N]):
+#     axes[1].plot(asig.times,asig.magnitude+i*ysep,'k',lw=2,alpha=0.8)
+#     axes[1].plot(asig.times,Y_hat[:,i]+i*ysep,'C3',lw=1)
+#     axes[1].plot(asig.times,Y_hat_lr[:,i]+i*ysep,'C4',lw=1)
+
+# axes[1].set_xlabel('time (s)')
+# axes[1].set_ylabel('signal (au)')
+# fig.suptitle('simulated data')
+# sns.despine(fig)
+# fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+# axes[1].set_xlim(0,60)
 
 """
  
@@ -240,6 +245,7 @@ axes[1].set_xlim(0,60)
 so the Q is, what do we gain from now having L and W? 
 """
 # %% inspecting L
+l = copy(L[1:])
 fig, axes = plt.subplots(figsize=[6,5],nrows=r,ncols=nEvents,sharex=True,sharey=True)
 for ri in range(r):
     ll = l[:,ri]
@@ -253,6 +259,7 @@ fig.suptitle('latent factors')
 plt.figtext(0.05,0.5,'rank',rotation='vertical')
 sns.despine(fig)
 fig.tight_layout(rect=[0.05, 0.03, 1, 0.95])
+fig.savefig('plots/rrr_L.png')
 
 # %% inspect W
 fig, axes = plt.subplots(figsize=[6,4])
@@ -263,6 +270,7 @@ axes.set_ylabel('from latent factors')
 axes.set_title('Weigths')
 axes.xaxis.set_ticks_position('bottom')
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+fig.savefig('plots/rrr_W.png')
 
 """
  
@@ -307,7 +315,7 @@ fig.subplots_adjust(top=0.85)
 for i in range(nKernels):
     axes[i].plot(Kernels.times,Kernels_pred[:,i],'C3',alpha=1)
     
-
+fig.savefig('plots/rrr_simple_kernel_pred.png')
 
 # %%
 """
@@ -365,7 +373,7 @@ for ax in axes[:-1]:
     ax.set_aspect('auto')
 axes[0].set_ylabel('from Kernel')
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-
+fig.savefig('plots/simple_weight_pred.png')
 
 
 

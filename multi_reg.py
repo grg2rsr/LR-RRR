@@ -20,7 +20,7 @@ kvec = sp.arange(-2,2,dt) * pq.s
 t_stop = 5*60 * pq.s
 
 nEvents = 4
-rates = sp.ones(nEvents)*0.33*pq.Hz
+rates = sp.ones(nEvents)*0.2*pq.Hz
 Events = generate_events(nEvents, rates, t_stop)
 
 # last event contains 
@@ -44,6 +44,7 @@ fig, axes = plot_kernels(Kernels)
 fig.suptitle('Kernels')
 fig.tight_layout()
 fig.subplots_adjust(top=0.85)
+fig.savefig('plots/multi_kernels.png')
 
 # %% plot the weights
 fig, axes = plt.subplots(figsize=[6,4])
@@ -54,6 +55,7 @@ axes.set_ylabel('from kernels')
 axes.set_title('Weigths')
 axes.xaxis.set_ticks_position('bottom')
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+fig.savefig('plots/multi_weights.png')
 
 # %% plot the simulated data
 fig, axes = plt.subplots(nrows=2, sharex=True, figsize=[6,4], gridspec_kw=dict(height_ratios=(0.2,1)))
@@ -71,6 +73,7 @@ fig.suptitle('simulated data')
 sns.despine(fig)
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 axes[1].set_xlim(0,30)
+fig.savefig('plots/multi_data.png')
 
 """
  
@@ -116,6 +119,7 @@ fig.suptitle('simulated data')
 sns.despine(fig)
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 axes[1].set_xlim(0,30)
+fig.savefig('plots/multi_fit.png')
 
 # %% plotting inferred kernels
 """
@@ -127,8 +131,8 @@ fig, axes = plt.subplots(figsize=[6,6], nrows=N,ncols=nEvents,sharex=True,sharey
 for i in range(N):
     Kernels_pred = copy(B_hat[1:,i].reshape(nKernels,-1).T)
     for j in range(nEvents):
-        axes[i,j].plot(kvec,Kernels[:,j] * Weights[j,i],'k',lw=2,alpha=0.75)
-        axes[i,j].plot(kvec,Kernels_pred[:,j] ,'C3',lw=1)
+        axes[i,j].plot(kvec,Kernels[:,j] * Weights[j,i],'k',lw=2,alpha=1)
+        axes[i,j].plot(kvec,Kernels_pred[:,j] ,'C3',lw=1,alpha=0.75)
 
 for ax in axes[-1,:]:
     ax.set_xlabel('time (s)')
@@ -136,6 +140,7 @@ fig.suptitle('est. kernels for each unit')
 sns.despine(fig)
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 fig.subplots_adjust(hspace=0.1,wspace=0.1)
+fig.savefig('plots/multi_kernels_est.png')
 
 """
 but we don't

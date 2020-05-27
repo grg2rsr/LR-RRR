@@ -8,11 +8,11 @@ import pandas as pd
 def times2inds(tvec,times):
     return [sp.argmin(sp.absolute(tvec - t)) for t in times] 
 
-def generate_kernels(nKernels, kvec, spread=0.5, width=0.2, normed=True):
+def generate_kernels(nKernels, kvec, spread=0.5, width=0.5, normed=True):
     """ generate some shapes """
 
     mus = sp.randn(nKernels) * spread
-    sigs = sp.ones(nKernels) * width
+    sigs = 0.1 + sp.rand(nKernels) * width
 
     # kernels is matrix of shape k timepoints x events
     Kernels = sp.zeros((kvec.shape[0],nKernels))
