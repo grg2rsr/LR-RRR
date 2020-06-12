@@ -41,18 +41,25 @@ Events[0] = Events[0].merge(Events[1].time_shift(1*pq.s)).time_slice(0,t_stop)
 Events[-2] = Events[-1]
 
 nKernels = nEvents
-Kernels = generate_kernels(nKernels, kvec, normed=True, spread=0.5)
+# Kernels = generate_kernels(nKernels, kvec, normed=True, spread=0.5)
+Kernels = generate_kernels(nKernels, kvec, normed=True, spread=0.5, mus=[0,0,0,1,-1],sigs=[.5,.5,.5,.5,.5])
+
 
 nUnits = 50
 q = 3
 Weights = sp.rand(nEvents,nUnits)**q - sp.rand(nEvents,nUnits)**q * 0.5 # power for sparseness
 
-# inject cov of level c in half of the units
+# inject cov of level c in half of the units w the dup kernels
 c = 0.5
 T = np.array([[1,c],[c,1]])
 Weights[-2:,:int(nUnits/2)] = (Weights[-2:,:int(nUnits/2)].T @ T).T
-
 print("CC on this run: %2.2f"% np.corrcoef(Weights[-1,:],Weights[-2,:])[0,1])
+
+# # inject cov across units
+# c = 0.5
+# T = np.ones((nEvents,nEvents)) / 2
+# T[np.diag_indices(nEvents)] = 1 
+# Weights[:,:int(nUnits/3)] = (Weights[:,:int(nUnits/3)].T @ T).T
 
 Asigs = generate_data(Kernels, Events, Weights, t_stop, noise=0.5)
 
@@ -60,12 +67,6 @@ Seg = neo.core.Segment()
 [Seg.analogsignals.append(asig) for asig in Asigs]
 [Seg.events.append(event) for event in Events[:-1]]
 nEvents = nEvents -1
-
-# %% plot kernels
-# fig, axes = plot_kernels(Kernels)
-# fig.suptitle('Kernels')
-# fig.tight_layout()
-# fig.subplots_adjust(top=0.85)
 
 # %% plot kernels - both on last
 fig, axes = plt.subplots(ncols=nKernels-1, figsize=[6,1.5])
@@ -342,16 +343,95 @@ fig.tight_layout(rect=[0, 0.03, 1, 0.95])
   #######   ######  #### ##    ##  ######     ######## 
  
 # %% how many independent things are there per event?
-"""
+l = copy(L[1:])
+LatF = np.array(np.split(l,nEvents,0)).swapaxes(0,1)
+
+# A = LatF[:,1,:]
+# A = Q[:,-1,:]
+
+
+from sklearn.decomposition import FastICA as ICA
+from sklearn.decomposition import PCA
+
+def estimate_rank(A,th=0.99):
+    """ estimate rank by explained variance on PCA """
+    pca = PCA(n_components=A.shape[1])
+    pca.fit(A)
+    var_exp = sp.cumsum(pca.explained_variance_ratio_) < th
+    return 1 + np.sum(var_exp)
+
+
+# %% the rather getting to work sth i understand varaint
+fig, axes = plt.subplots(ncols=nEvents,sharey=True,figsize=[6,1.5])
+candidate_kernels = []
+for i in range(nEvents):
+    nBases = estimate_rank(LatF[:,i,:])
+    ica = ICA(n_components=nBases, whiten=True)
+    
+    # the transposed variant
+    # A = LatF[:,i,:].T
+    # I = ica.fit_transform(A)
+    # K = A.T @ I
+
+    # the normal variant
+    A = copy(LatF[:,i,:])
+    I = ica.fit_transform(A)
+    # K = A @ ica.mixing_
+    K = I @ ica.mixing_.T
+    K = A
+
+    for j in range(K.shape[1]):
+        # invert
+        if K[:,j].max() < np.absolute(K[:,j]).max():
+            K[:,j] *= -1
+        
+        # normalize
+        K[:,j] /= K[:,j].max()
+
+    axes[i].plot(kvec, K)
+    # candidate_kernels.append(candidate_kernel)
+
+for ax in axes:
+    ax.axvline(0,linestyle=':',color='k',alpha=0.5)
+    ax.set_xlabel('time (s)')
+sns.despine(fig)
+axes[0].set_ylabel('au')
+fig.suptitle('Kernels')
+fig.tight_layout()
+fig.subplots_adjust(top=0.85)
+
+# %% the it is not obvious why and how it works variant
+fig, axes = plt.subplots(ncols=nEvents,sharey=True)
+candidate_kernels = []
+for i in range(nEvents):
+    nBases = estimate_rank(LatF[:,i,:])
+    ica = ICA(n_components=nBases)
+    A = LatF[:,i,:]
+    # P = ica.fit(A.T).transform(A.T) # features are timepoints
+    I = ica.fit_transform(A.T)
+    M = ica.mixing_
+    candidate_kernel = A @ I  # @ .M.T + ica.mean_
+    axes[i].plot(kvec, candidate_kernel)
+    # candidate_kernels.append(candidate_kernel)
+
+
+"""     
 is this useful? an independent thing might involve 
+
+fig, axes = plt.subplots(ncols=nEvents,sharey=True)
+candidate_kernels = []
+for i in range(nEvents):
+    nBases = estimate_rank(LatF[:,i,:])
+    ica = ICA(n_components=nBases).fit(LatF[:,i,:].T) # does ica on ti
+    P = ica.transform(LatF[:,i,:].T)
+    candidate_kernel = LatF[:,i,:] @ P
+    axes[i].plot(kvec, candidate_kernel)
+    candidate_kernels.append(candidate_kernel)
 """
 
 # %% ICA on latent factors to retrieve kernels?
 l = copy(L[1:])
 LatF = np.array(np.split(l,nEvents,0)).swapaxes(0,1)
-
-from sklearn.decomposition import FastICA as ica
-from sklearn.decomposition import PCA as pca
 
 fig, axes = plt.subplots(ncols=nEvents,sharey=True)
 for i in range(nEvents):
@@ -372,8 +452,8 @@ M = np.zeros((nLags,nEvents,nComps))
 Q = np.array(np.split(B_hat_lr[1:,:],nEvents,0)).swapaxes(0,1)
 
 for i in range(nEvents):
-    # D = LatF[:,i,:].T
-    D = Q[:,i,:].T
+    D = LatF[:,i,:].T
+    # D = Q[:,i,:].T
     I = ica(n_components=nComps).fit(D)
     P = I.transform(D)
     M[:,i,:] = D.T @ P
@@ -403,6 +483,17 @@ axes[-1].plot(Kernels.times,Kernels[:,-1],color='gray',lw=2,alpha=0.8,zorder=-1)
  ##     ## ##    ##  ##  ##   ### ##    ##     ##  ##  ## 
   #######   ######  #### ##    ##  ######       ###  ###  
  
+"""
+W can be clustered in 2 dimensions
+along units
+along events
+"""
+# %% 
+
+# from sklearn.cluster import AffinityPropagation as AfP
+# res = AfP().fit(W.T)
+# labels = res.labels_
+# nClusters = len(sp.unique(labels))
 
 # %% clustering the weights
 # and forming from them "patterns"
@@ -445,24 +536,29 @@ fig.savefig('plots/RRR_clusters.png')
 # %% per cluster analysis
 """ each cluster is one of the things that are going on """
 """ how to L combine on a per cluster basis? """
+""" averaging clusters makes no sense? """
 
-j = 0
 fig, axes = plt.subplots(ncols=nEvents,nrows=nClusters,figsize=[6,4],sharey=True)
 for j in range(nClusters):
     B_hat_cluster = L @ W[:,labels == j]
-    Y_hat_c = X @ B_hat_cluster
-    print(Rss(Y[:,labels == j], Y_hat_c))
+    # Y_hat_c = X @ B_hat_cluster
+    # print(Rss(Y[:,labels == j], Y_hat_c))
     splits = sp.array(sp.split(B_hat_cluster[1:,:],nEvents,0)).swapaxes(0,1)
     for i in range(nEvents):
-        axes[j,i].plot(kvec,splits[:,i,:])
+        axes[j,i].plot(kvec,splits[:,i,:],lw=1,color='k',alpha=0.25)
+        axes[j,i].plot(kvec,sp.average(splits[:,i,:],1),lw=2,color='C0')
 
-# %%
+for ax in axes[-1,:]:
+    ax.set_xlabel('time (s)')
+
+sns.despine(fig)
+plt.figtext(0.025,0.5,'rank',rotation='vertical')
+fig.tight_layout(rect=[0.05, 0.03, 1, 0.95])
+fig.subplots_adjust(hspace=0.1,wspace=0.1)
+fig.savefig('plots/RRR_combinations.png')
 
 
-# %%
-
-# getting candidate kernels
-nLags = 200
+# %% getting candidate kernels
 candidate_kernels = np.zeros((nLags,nEvents,nClusters))
 for j in range(nClusters):
     B_hat_cluster = l @ W[:,labels == j]
@@ -519,7 +615,7 @@ for i in range(nEvents):
     for j in range(nClusters):
         if candidate_kernels[:,i,j].max() < np.absolute(candidate_kernels[:,i,j]).max():
             candidate_kernels[:,i,j] *= -1
-        # candidate_kernels[:,i,j] /= candidate_kernels[:,i,j].max()
+        candidate_kernels[:,i,j] /= candidate_kernels[:,i,j].max()
 
 # %% select the r largest
 ix_2d = []
