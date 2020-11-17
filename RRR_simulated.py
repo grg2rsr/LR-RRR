@@ -10,7 +10,8 @@ from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-mpl.rcParams['figure.dpi'] = 166
+# mpl.rcParams['figure.dpi'] = 166
+mpl.rcParams['figure.dpi'] = 331
 
 import quantities as pq
 import neo
@@ -38,44 +39,54 @@ from RRRlib import *
 dt = 0.02 # time bin for firing rate estimation
 t_stop = 1*60*60 * pq.s # 1h recording
 
-nEvents = 4 # number of events 
+nEvents = 5 # number of events 
 rates = np.ones(nEvents)*0.2*pq.Hz # average rate of events
+rates[1] /= 2
 Events = generate_events(nEvents, rates, t_stop)
 
-# first problem: 
-# A->B causality, with time lag
+e1 = Events[-2]
+e2 = Events[-1]
+Events.append(e1)
+Events.append(e2)
+
+# nEvents = nEvents + 2
+
+# first problem: (this one fails at ETA)
+# A->B causality, with time lag for vis
 # realized by merging first two events
 Events[1] = Events[1].merge(Events[0].time_shift(0.5*pq.s)).time_slice(0,t_stop)
 
-# second problem:
-# multiple kernels behind one event
+# further problems (not in order):
+# multiple kernels behind two events, one with cov and one without
 # realized by duplication and simulating an extra kernel for it
-Events.append(Events[-1])
 
 # problems to revisit - I think this should be the first problem
 # responses in data without any events
 # -> do they disturb the other predicted kernels?
+# solved below, they don't 
 
 # events without any responses in data
 # -> do they acquire any respnses
-
-
+# solved below - sort this mess
 
 # simulating Kernels
 kvec = np.arange(-2,2,dt) * pq.s
 nKernels = len(Events)
 # Kernels = generate_kernels(nKernels, kvec, normed=True, spread=0.5)
-Kernels = generate_kernels(nKernels, kvec, normed=True, spread=0.5, mus=[0,0,0,1,-1],sigs=[.5,.5,.5,.5,.5])
+Kernels = generate_kernels(nKernels, kvec, normed=True, spread=0.5, mus=[0,0,0,1,1,-1,-1],sigs=sp.ones(nKernels)/2, scale=[1,1,0,1,1,1,1])
 
 # simulating units
 nUnits = 50
-q = 3 # sparseness
-Weights = sp.rand(nEvents+1,nUnits)**q - sp.rand(nEvents+1,nUnits)**q * 0.5
+
+# Weight matrix: nEvents x nUnits
+q = 5 # sparseness
+Weights = sp.rand(nKernels,nUnits)**q - sp.rand(nKernels,nUnits)**q * 0.5
 
 # injecting covariance of level c in half of the units w the duplicate kernels
-c = 0.75
+c = 1.0
 T = np.array([[1,c],[c,1]])
-Weights[-2:,:int(nUnits/2)] = (Weights[-2:,:int(nUnits/2)].T @ T).T
+Weights[[-3,-1],:int(nUnits/2)] = (Weights[[-3,-1],:int(nUnits/2)].T @ T).T
+# Weights[:,0] = 1
 print("CC on this run: %2.2f"% np.corrcoef(Weights[-1,:],Weights[-2,:])[0,1])
 
 # injecting covariance of level c in half of the units w the duplicate kernels
@@ -95,20 +106,37 @@ print("CC on this run: %2.2f"% np.corrcoef(Weights[-1,:],Weights[-2,:])[0,1])
 
 Asigs = generate_data(Kernels, Events, Weights, t_stop, noise=0.5)
 
+# adding hidden signal to the signal (that can't be modelled)
+add_hidden = True
+
+if add_hidden:
+    nEvents_other = nEvents
+    nKernels_other = nKernels
+    rates_other = np.ones(nEvents_other) * 1.0 * pq.Hz
+    Events_other = generate_events(nEvents_other, rates_other, t_stop)
+    Kernels_other = generate_kernels(nKernels_other, kvec, normed=True, spread=0.5)
+    Weights_other = sp.rand(nEvents_other,nUnits)**q - sp.rand(nEvents_other,nUnits)**q * 0.5
+    Asigs_other = generate_data(Kernels_other, Events_other, Weights_other, t_stop, noise=0.5)
+
+    for i in range(len(Asigs)):
+        Asigs[i] += Asigs_other[i]
+
 Seg = neo.core.Segment()
 [Seg.analogsignals.append(asig) for asig in Asigs]
-[Seg.events.append(event) for event in Events[:-1]]
-
+[Seg.events.append(event) for event in Events[:-2]] # the last two duplicate events
 
 # %% plot kernels - both on last
-fig, axes = plt.subplots(ncols=nKernels-1, figsize=[6,1.5])
-for i in range(nKernels-1):
+fig, axes = plt.subplots(ncols=nEvents, figsize=[6,1.5])
+for i in range(nEvents):
     axes[i].plot(Kernels.times,Kernels[:,i],color='C%i'%i)
-axes[-1].plot(Kernels.times,Kernels[:,-1],color='C%i'%(nKernels-1))
+
+for i in [-2,-1]:
+    axes[i].plot(Kernels.times,Kernels[:,i],color='C%i'%(nEvents+-i))
 
 for ax in axes:
     ax.axvline(0,linestyle=':',color='k',alpha=0.5)
     ax.set_xlabel('time (s)')
+    ax.set_ylim(-0.1,1.1)
 sns.despine(fig)
 axes[0].set_ylabel('au')
 fig.suptitle('Kernels')
@@ -127,7 +155,6 @@ axes.set_aspect('auto')
 axes.xaxis.set_ticks_position('bottom')
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 fig.savefig('plots/RRR_weights.png')
-
 
 # %% plot the simulated data
 fig, axes = plt.subplots(nrows=2, sharex=True, figsize=[6,4], gridspec_kw=dict(height_ratios=(0.2,1)))
@@ -149,7 +176,7 @@ axes[1].set_xlim(0,60)
 fig.savefig('plots/RRR_sim_data.png')
 
 # %% maybe some classic ETA to compare
-asig = Seg.analogsignals[1]
+asig = Seg.analogsignals[0]
 fig, axes = plt.subplots(ncols=nEvents,figsize=[6,2.5])
 t_slice = (-2,2) * pq.s
 for i, event in enumerate(Events[:-1]):
@@ -158,7 +185,7 @@ for i, event in enumerate(Events[:-1]):
         try:
             asig_slice = asig.time_slice(t+t_slice[0],t+t_slice[1])
             tvec = asig_slice.times - t
-            axes[i].plot(tvec, asig_slice, 'k', alpha=0.25,lw=1)
+            # axes[i].plot(tvec, asig_slice, 'k', alpha=0.25,lw=1)
             asig_slices.append(asig_slice)
         except ValueError:
             pass
@@ -189,14 +216,15 @@ fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 """
 
 # %% unpack data
-Y, X, lags = unpack_segment(Seg, num_lags=200, intercept=True)
+Y, X, t_lags = unpack_segment(Seg, num_lags=200, intercept=True)
 
 # %% xval lambda
 k = 5
-lam = xval_ridge_reg_lambda(Y, X, k)
+lam = xval_ridge_reg_lambda(Y[:1000], X[:1000], k)
 
 # %% cheat
-lam = 7.5
+lam = 24.83
+
 # %% xval rank
 
 # idea: at which rank does Rss get worset than 1 SD
@@ -208,8 +236,8 @@ ranks = list(range(2,10))
 Rsss_lm, Rsss_rrr = xval_rank(Y, X, lam, ranks, k)
 
 #r select
-ix = np.argmax(np.average(Rsss_rrr, axis=0) < np.average(Rsss) + np.std(Rsss_lm))
-r = rr[ix]
+ix = np.argmax(np.average(Rsss_rrr, axis=0) < np.average(Rsss_lm) + np.std(Rsss_lm))
+r = ranks[ix]
 
 # %% inspect ranks - this will be an important inspection step
 fig, axes = plt.subplots(figsize=[3,3])
@@ -231,9 +259,9 @@ fig.tight_layout()
 
 # %% cheat
 nLags = 200
-Y, X, lags = unpack_segment(Seg, num_lags=nLags, intercept=True)
-lam = 7.542359257994322
-r = nEvents + 1
+Y, X, t_lags = unpack_segment(Seg, num_lags=nLags, intercept=True)
+lam = 24.8
+r = nEvents + 2
 
 # %% full model final run
 B_hat = LM(Y, X, lam=lam)
@@ -251,17 +279,25 @@ print("Full model error comparision:")
 print("LM: %5.3f, RRR: %5.3f" % (Rss(Y,Y_hat), Rss(Y,Y_hat_lr)))
 
 # %% plotting inferred kernels
-N = 10 # for the first 10 units
-kvec = Kernels.times
+N = 5 # for the first N units
 fig, axes = plt.subplots(figsize=[6,5], nrows=N,ncols=nEvents,sharex=True,sharey=True)
-for i in range(N):
-    Kernels_pred = copy(B_hat[1:,i].reshape(nEvents,-1).T)
-    for j in range(nEvents):
-        axes[i,j].plot(kvec,Kernels[:,j] * Weights[j,i],'k',lw=2,alpha=0.75)
-        axes[i,j].plot(kvec,Kernels_pred[:,j] ,'C3',lw=1)
 
-    # the duplicate kernel
-    axes[i,j].plot(kvec,Kernels[:,-1] * Weights[-1,i],'gray',lw=3,alpha=0.75,zorder=-1)
+# plotting the known kernels
+kvec = Kernels.times.rescale('ms')
+for i in range(N):
+    for j in range(nEvents):
+        axes[i,j].plot(kvec, Kernels[:,j] * Weights[j,i], 'C%i'%j, lw=3, alpha=0.75)
+
+    # the duplicate kernels
+    for j in [-2,-1]:
+        axes[i,j].plot(kvec, Kernels[:,j] * Weights[j,i], 'C%i'%(nEvents+-j), lw=3, alpha=0.75, zorder=-1)
+
+# plotting predicted kernels for the units
+b = copy(B_hat[1:])
+Kernels_pred = np.array(np.split(b,nEvents,0)).swapaxes(0,1)
+for i in range(N):
+    for j in range(nEvents):
+        axes[i,j].plot(t_lags, Kernels_pred[:,j,i], 'k', lw=1, alpha=0.75)
 
 for ax in axes[-1,:]:
     ax.set_xlabel('time (s)')
@@ -289,7 +325,7 @@ axes[1].set_yticklabels([])
 fig.suptitle('simulated data')
 sns.despine(fig)
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-axes[1].set_xlim(0,60)
+axes[1].set_xlim(0,120)
 
 """
  
@@ -317,7 +353,7 @@ for ax in axes[-1,:]:
 fig.suptitle('latent factors')
 plt.figtext(0.05,0.5,'rank',rotation='vertical')
 sns.despine(fig)
-fig.tight_layout(rect=[0.05, 0.03, 1, 0.95])
+# fig.tight_layout(rect=[0.05, 0.03, 1, 0.95])
 
 # %% inspect W
 fig, axes = plt.subplots(figsize=[6,2])
@@ -347,10 +383,11 @@ fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 # %% THIS APPROACH SOLVES FOR COV=0
 # more notes on this - the covariance error is exactly transferred
 # is it?
+# also does not solve for cov0?
 
 l = copy(L[1:])
 LatF = np.array(np.split(l,nEvents,0)).swapaxes(0,1)
-# LatF.shape (nLags, nEvents, rank)
+# LatF.shape id of shape (nLags, nEvents, rank)
 
 # general idea: orthogonalize several embedded signals if detected
 # orthogonal signals -> candidate kernels based on ica
@@ -363,12 +400,12 @@ LatF = np.array(np.split(l,nEvents,0)).swapaxes(0,1)
 # instead of forcing basis to be orthogonal
 # force the mixing matrix to have orthogonal rows?
 
-
 candidate_kernels = [] # will be list arrays (nLags x r_est)
 
 for i in range(nEvents):
     D = LatF[:,i,:]
-    r_est = pca_rank_est(D)
+    r_est = pca_rank_est(D, th=0.95)
+    print(i, r_est)
 
     # this needs proper description
     R = D @ W
@@ -376,36 +413,27 @@ for i in range(nEvents):
     K = R @ linalg.pinv(P.T)
 
     # peak invert if negative
-    # for j in range(K.shape[1]):
-    #     if K[:,j].max() < np.absolute(K[:,j]).max():
-    #         K[:,j] *= -1
+    for j in range(K.shape[1]):
+        if K[:,j].max() < np.absolute(K[:,j]).max():
+            K[:,j] *= -1
 
     # normalize all
-    # for j in range(K.shape[1]):
-    #     K[:,j] /= K[:,j].max()
+    for j in range(K.shape[1]):
+        K[:,j] /= K[:,j].max()
 
     candidate_kernels.append(K)
 
+# # %% index flip kernels for plotting if necessary
+# from copy import copy
+# tmp = copy(candidate_kernels[-1])
+# candidate_kernels[-1][:,0] = candidate_kernels[-1][:,1]
+# candidate_kernels[-1][:,1] = tmp[:,0]
 
-# %% index flip kernels for plotting if necessary
-from copy import copy
-tmp = copy(candidate_kernels[-1])
-candidate_kernels[-1][:,0] = candidate_kernels[-1][:,1]
-candidate_kernels[-1][:,1] = tmp[:,0]
-
-# %% plot kernels - both on last
-# fig, axes = plt.subplots(ncols=nKernels-1, figsize=[6,1.5])
-# for i in range(nKernels-1):
-#     axes[i].plot(Kernels.times,Kernels[:,i],color='C%i'%i)
-#     # axes[i].plot(Kernels.times,Kernels[:,i],color='k',lw=1)
-# axes[-1].plot(Kernels.times,Kernels[:,-1],color='C%i'%(nKernels-1))
-# # axes[-1].plot(Kernels.times,Kernels[:,-1],color='k',lw=1)
-
+# %% plot candidate kernels
 fig, axes = plt.subplots(ncols=nEvents, figsize=[6,1.5])
 
 for i in range(len(candidate_kernels)):
     for j in range(candidate_kernels[i].shape[1]):
-        # axes[i].plot(Kernels.times, candidate_kernels[i][:,j], alpha=0.75, color='C%i'%(i+j),lw=2)
         axes[i].plot(t_lags, candidate_kernels[i][:,j], alpha=0.75, color='C%i'%(i+j),lw=2)
 
 for ax in axes:
@@ -415,10 +443,9 @@ for ax in axes:
 sns.despine(fig)
 axes[0].set_ylabel('au')
 fig.suptitle('Kernels')
-fig.tight_layout()
 fig.subplots_adjust(top=0.85)
+# fig.tight_layout()
 fig.savefig('plots/RRR_kernels.png')
-
 
 # %% With events and candidate kernels -> predict signals -> retrieve weights
 dt = 0.02
@@ -535,7 +562,7 @@ fig.savefig('plots/RRR_clusters.png')
 
 # %% rerun the above on clusters?
 ck = []
-for q in range(5):
+for q in range(r):
     l = copy(L[1:])
     LatF = np.array(np.split(l,nEvents,0)).swapaxes(0,1)
 
@@ -570,16 +597,17 @@ for q in range(5):
     # candidate_kernels[-1][:,1] = tmp[:,0]
 
     # %% plot kernels - both on last
-    fig, axes = plt.subplots(ncols=nKernels-1, figsize=[6,1.5])
-    for i in range(nKernels-1):
-        axes[i].plot(Kernels.times,Kernels[:,i],color='C%i'%i)
+    # for i in range(nKernels-1):
+        # axes[i].plot(Kernels.times,Kernels[:,i],color='C%i'%i)
         # axes[i].plot(Kernels.times,Kernels[:,i],color='k',lw=1)
-    axes[-1].plot(Kernels.times,Kernels[:,-1],color='C%i'%(nKernels-1))
+    # axes[-1].plot(Kernels.times,Kernels[:,-1],color='C%i'%(nKernels-1))
     # axes[-1].plot(Kernels.times,Kernels[:,-1],color='k',lw=1)
+
+    fig, axes = plt.subplots(ncols=nEvents, figsize=[6,1.5])
 
     for i in range(len(candidate_kernels)):
         for j in range(candidate_kernels[i].shape[1]):
-            axes[i].plot(Kernels.times, candidate_kernels[i][:,j], alpha=0.75, color='C%i'%(i+j),lw=2)
+            axes[i].plot(t_lags, candidate_kernels[i][:,j], alpha=0.75, color='C%i'%(i+j),lw=2)
 
     for ax in axes:
         ax.axvline(0,linestyle=':',color='k',alpha=0.5)

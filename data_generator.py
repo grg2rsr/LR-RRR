@@ -8,13 +8,15 @@ import pandas as pd
 def times2inds(tvec,times):
     return [sp.argmin(sp.absolute(tvec - t)) for t in times] 
 
-def generate_kernels(nKernels, kvec, spread=0.5, width=0.5, normed=True, sigs=None, mus=None):
+def generate_kernels(nKernels, kvec, spread=0.5, width=0.5, normed=True, sigs=None, mus=None, scale=None):
     """ generate some shapes """
 
     if mus is None:
         mus = sp.randn(nKernels) * spread
     if sigs is None:
         sigs = 0.1 + sp.rand(nKernels) * width
+    if scale is None:
+        scale = sp.ones(nKernels)
 
     # kernels is matrix of shape k timepoints x events
     Kernels = sp.zeros((kvec.shape[0],nKernels))
@@ -22,6 +24,7 @@ def generate_kernels(nKernels, kvec, spread=0.5, width=0.5, normed=True, sigs=No
         Kernels[:,i] = sp.stats.distributions.norm(mus[i],sigs[i]).pdf(kvec)
         if normed:
             Kernels[:,i] /= Kernels[:,i].max()
+            Kernels[:,i] *= scale[i]
 
     Kernels = neo.core.AnalogSignal(Kernels,units=pq.dimensionless, t_start=kvec[0],t_stop=kvec[-1],sampling_period=sp.diff(kvec)[0])
     
