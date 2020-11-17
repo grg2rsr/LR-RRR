@@ -39,7 +39,6 @@ dt = 0.02 # time bin for firing rate estimation
 t_stop = 1*60*60 * pq.s # 1h recording
 
 nEvents = 4 # number of events 
-# rates = np.ones(nEvents)*0.2*pq.Hz # average rate of events
 rates = np.ones(nEvents)*0.2*pq.Hz # average rate of events
 Events = generate_events(nEvents, rates, t_stop)
 
@@ -52,6 +51,15 @@ Events[1] = Events[1].merge(Events[0].time_shift(0.5*pq.s)).time_slice(0,t_stop)
 # multiple kernels behind one event
 # realized by duplication and simulating an extra kernel for it
 Events.append(Events[-1])
+
+# problems to revisit - I think this should be the first problem
+# responses in data without any events
+# -> do they disturb the other predicted kernels?
+
+# events without any responses in data
+# -> do they acquire any respnses
+
+
 
 # simulating Kernels
 kvec = np.arange(-2,2,dt) * pq.s
@@ -338,7 +346,7 @@ fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
 # %% THIS APPROACH SOLVES FOR COV=0
 # more notes on this - the covariance error is exactly transferred
-
+# is it?
 
 l = copy(L[1:])
 LatF = np.array(np.split(l,nEvents,0)).swapaxes(0,1)
@@ -368,13 +376,13 @@ for i in range(nEvents):
     K = R @ linalg.pinv(P.T)
 
     # peak invert if negative
-    for j in range(K.shape[1]):
-        if K[:,j].max() < np.absolute(K[:,j]).max():
-            K[:,j] *= -1
+    # for j in range(K.shape[1]):
+    #     if K[:,j].max() < np.absolute(K[:,j]).max():
+    #         K[:,j] *= -1
 
     # normalize all
-    for j in range(K.shape[1]):
-        K[:,j] /= K[:,j].max()
+    # for j in range(K.shape[1]):
+    #     K[:,j] /= K[:,j].max()
 
     candidate_kernels.append(K)
 
@@ -386,16 +394,19 @@ candidate_kernels[-1][:,0] = candidate_kernels[-1][:,1]
 candidate_kernels[-1][:,1] = tmp[:,0]
 
 # %% plot kernels - both on last
-fig, axes = plt.subplots(ncols=nKernels-1, figsize=[6,1.5])
-for i in range(nKernels-1):
-    axes[i].plot(Kernels.times,Kernels[:,i],color='C%i'%i)
-    # axes[i].plot(Kernels.times,Kernels[:,i],color='k',lw=1)
-axes[-1].plot(Kernels.times,Kernels[:,-1],color='C%i'%(nKernels-1))
-# axes[-1].plot(Kernels.times,Kernels[:,-1],color='k',lw=1)
+# fig, axes = plt.subplots(ncols=nKernels-1, figsize=[6,1.5])
+# for i in range(nKernels-1):
+#     axes[i].plot(Kernels.times,Kernels[:,i],color='C%i'%i)
+#     # axes[i].plot(Kernels.times,Kernels[:,i],color='k',lw=1)
+# axes[-1].plot(Kernels.times,Kernels[:,-1],color='C%i'%(nKernels-1))
+# # axes[-1].plot(Kernels.times,Kernels[:,-1],color='k',lw=1)
+
+fig, axes = plt.subplots(ncols=nEvents, figsize=[6,1.5])
 
 for i in range(len(candidate_kernels)):
     for j in range(candidate_kernels[i].shape[1]):
-        axes[i].plot(Kernels.times, candidate_kernels[i][:,j], alpha=0.75, color='C%i'%(i+j),lw=2)
+        # axes[i].plot(Kernels.times, candidate_kernels[i][:,j], alpha=0.75, color='C%i'%(i+j),lw=2)
+        axes[i].plot(t_lags, candidate_kernels[i][:,j], alpha=0.75, color='C%i'%(i+j),lw=2)
 
 for ax in axes:
     ax.axvline(0,linestyle=':',color='k',alpha=0.5)

@@ -27,20 +27,20 @@ def generate_kernels(nKernels, kvec, spread=0.5, width=0.5, normed=True, sigs=No
     
     return Kernels
 
-def distribute_latent_kernels(LatKernels, Weights, as_asig=True, normed=False):
-    """ Weights define the mapping of how the Kernels are combined to features
-    Weights thus contain nFeatures
-    """
-    dt = LatKernels.sampling_period
-    kvec = LatKernels.times
+# def distribute_latent_kernels(LatKernels, Weights, as_asig=True, normed=False):
+#     """ Weights define the mapping of how the Kernels are combined to features
+#     Weights thus contain nFeatures
+#     """
+#     dt = LatKernels.sampling_period
+#     kvec = LatKernels.times
 
-    ObsKernels =  LatKernels.magnitude @ Weights
-    if normed:
-        ObsKernels = ObsKernels / ObsKernels.max(0)[sp.newaxis,:]
+#     ObsKernels =  LatKernels.magnitude @ Weights
+#     if normed:
+#         ObsKernels = ObsKernels / ObsKernels.max(0)[sp.newaxis,:]
         
-    if as_asig:
-        ObsKernels = neo.core.AnalogSignal(ObsKernels,units=pq.dimensionless, t_start=kvec[0],t_stop=kvec[-1],sampling_period=dt)  
-    return ObsKernels
+#     if as_asig:
+#         ObsKernels = neo.core.AnalogSignal(ObsKernels,units=pq.dimensionless, t_start=kvec[0],t_stop=kvec[-1],sampling_period=dt)  
+#     return ObsKernels
 
 def generate_events(nEvents, rates, t_stop):
     Events = []
@@ -51,16 +51,8 @@ def generate_events(nEvents, rates, t_stop):
     return Events
 
 def generate_data(Kernels, Events, Weights, t_stop, noise=0):
-    """    FE_weights (n_features x n_events) is a matrix that distributes features on events
-    result is a matrix (n_kvec_samples x n_events)
-    
-    convolve each event with the respective column of the matrix
-    -> a matrix (t_samples x n_events)
-    then
+    """
 
-    how does each event act on each unit?
-    multiply above matrix with another distributing matris
-    EU_Weights (n_events x n_units)
     """
 
     dt = Kernels.sampling_period
@@ -91,29 +83,30 @@ def generate_data(Kernels, Events, Weights, t_stop, noise=0):
         Asigs.append(asig)
     return Asigs
 
-def unpack_segment(Seg, num_lags=100, intercept=True):
+def unpack_segment(Seg, num_lags=200, intercept=True):
     """ """
 
     lags = sp.arange(-num_lags/2,num_lags/2,1,dtype='int32')
 
     Y = sp.stack([asig.magnitude.flatten() for asig in Seg.analogsignals],axis=1)
-    t_stop = Seg.analogsignals[0].t_stop
-    dt = Seg.analogsignals[0].sampling_period
+    t_start = Seg.analogsignals[0].t_start.rescale('ms')
+    t_stop = Seg.analogsignals[0].t_stop.rescale('ms')
+    dt = Seg.analogsignals[0].sampling_period.rescale('ms')
 
     X = []
     for event in Seg.events:
         st = neo.core.SpikeTrain(event.times,t_stop=t_stop)
-        bst = ele.conversion.BinnedSpikeTrain(st,binsize=dt,t_stop=t_stop)
+        bst = ele.conversion.BinnedSpikeTrain(st, binsize=dt, t_start=t_start, t_stop=t_stop)
         reg = bst.to_array().flatten()
         for lag in lags:
             X.append(sp.roll(reg,lag))
 
     X = sp.stack(X,axis=1)
-    
+
     if intercept:
         X = sp.concatenate([sp.ones((X.shape[0],1)),X],1)
 
-    lags = lags * dt.magnitude
-    return Y, X, lags
+    t_lags = lags * dt.magnitude
+    return Y, X, t_lags
 
 

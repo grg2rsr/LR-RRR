@@ -2,6 +2,21 @@
 
 closed loop behavior with physiology leads to deep data
 
+measuring both behavior and neurons
+hen and egg problem
+task influences neural activity - neural activity influences behavior
+
+some simple examples:
+motor planning signals preceed movement
+sensory representations succeed sensory stimuli
+
+more interesting examples:
+reward expectation/prediction and reward consumption
+
+to find out if a neuron drives sth or is driven by sth
+first pass analysis
+align on event
+
 embedded in the data are: influence of task events on neurons, and vice versa 
 example: reward responding / reward predicting
 

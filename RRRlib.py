@@ -3,6 +3,7 @@ import numpy as np
 from scipy import linalg
 from tqdm import tqdm
 
+
 def LM(Y, X, lam=0):
     """ (multiple) linear regression with regularization """
     # ridge regression
@@ -71,7 +72,7 @@ def ica_orth(A, r=None):
 
 def xval_ridge_reg_lambda(Y, X, K=5):
     from scipy.optimize import minimize
-
+    
     def obj_fun(lam, Y_train, X_train, Y_test, X_test):
         B_hat = LM(Y_train, X_train, lam=lam)
         Y_hat_test = X_test @ B_hat
@@ -91,8 +92,8 @@ def xval_ridge_reg_lambda(Y, X, K=5):
         
         x0 = np.array([1])
         res = minimize(obj_fun, x0, args=(Y[ix_train], X[ix_train],
-                    Y[ix_test], X[ix_test]), bounds=[[0,np.inf]],
-                    options=dict(maxiter=100))
+                       Y[ix_test], X[ix_test]), bounds=[[0,np.inf]],
+                       options=dict(maxiter=100, disp=True))
         lambdas.append(res.x)
 
     return sp.average(lambdas)
