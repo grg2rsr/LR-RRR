@@ -76,18 +76,18 @@ nKernels = len(Events)
 Kernels = generate_kernels(nKernels, kvec, normed=True, spread=0.5, mus=[0,0,0,1,1,-1,-1],sigs=sp.ones(nKernels)/2, scale=[1,1,0,1,1,1,1])
 
 # simulating units
-nUnits = 50
+nUnits = 30
 
 # Weight matrix: nEvents x nUnits
 q = 5 # sparseness
 Weights = sp.rand(nKernels,nUnits)**q - sp.rand(nKernels,nUnits)**q * 0.5
 
 # injecting covariance of level c in half of the units w the duplicate kernels
-c = 1.0
+c = 0.95
 T = np.array([[1,c],[c,1]])
 Weights[[-3,-1],:int(nUnits/2)] = (Weights[[-3,-1],:int(nUnits/2)].T @ T).T
 # Weights[:,0] = 1
-print("CC on this run: %2.2f"% np.corrcoef(Weights[-1,:],Weights[-2,:])[0,1])
+print("CC on this run: %2.2f"% np.corrcoef(Weights[[-3,-1],:],Weights[[-3,-1],:])[0,1])
 
 # injecting covariance of level c in half of the units w the duplicate kernels
 # c = 1.0
@@ -112,7 +112,7 @@ add_hidden = True
 if add_hidden:
     nEvents_other = nEvents
     nKernels_other = nKernels
-    rates_other = np.ones(nEvents_other) * 1.0 * pq.Hz
+    rates_other = np.ones(nEvents_other) * 0.2 * pq.Hz
     Events_other = generate_events(nEvents_other, rates_other, t_stop)
     Kernels_other = generate_kernels(nKernels_other, kvec, normed=True, spread=0.5)
     Weights_other = sp.rand(nEvents_other,nUnits)**q - sp.rand(nEvents_other,nUnits)**q * 0.5
@@ -268,10 +268,11 @@ B_hat = LM(Y, X, lam=lam)
 Y_hat = X @ B_hat
 
 # RRR
-B_hat_lr = RRR(Y, X, B_hat, r)
+mode = 'left'
+B_hat_lr = RRR(Y, X, B_hat, r, mode=mode)
 Y_hat_lr = X @ B_hat_lr
 
-L, W = low_rank_approx(B_hat_lr,r)
+L, W = low_rank_approx(B_hat_lr,r, mode=mode)
 l = copy(L[1:]) # wo intercept
 
 # print error comparison
@@ -559,21 +560,20 @@ fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 fig.subplots_adjust(wspace=0.1)
 fig.savefig('plots/RRR_clusters.png')
 
-
-# %% rerun the above on clusters?
-ck = []
-for q in range(r):
-    l = copy(L[1:])
-    LatF = np.array(np.split(l,nEvents,0)).swapaxes(0,1)
-
+# %% recode
+# finish this up and thats it
+fig, axes = plt.subplots(nrows=nClusters, ncols=nEvents, figsize=[6,6])
+max_sep = sp.zeros((nClusters,nEvents))
+for label in sp.unique(labels):
     candidate_kernels = [] # will be list arrays (nLags x r_est)
 
     for i in range(nEvents):
         D = LatF[:,i,:]
-        r_est = pca_rank_est(D)
+        r_est = pca_rank_est(D, th=0.95)
+        # print(i, r_est)
 
         # this needs proper description
-        R = D @ W[:,labels==q]
+        R = D @ W[:,labels==label]
         P = low_rank_approx(R.T, r_est)[0]
         K = R @ linalg.pinv(P.T)
 
@@ -587,40 +587,98 @@ for q in range(r):
             K[:,j] /= K[:,j].max()
 
         candidate_kernels.append(K)
-        if K.shape[1] > 1:
-            print(sp.corrcoef(K.T))
-
-    # %% index flip kernels for plotting if necessary
-    # from copy import copy
-    # tmp = copy(candidate_kernels[-1])
-    # candidate_kernels[-1][:,0] = candidate_kernels[-1][:,1]
-    # candidate_kernels[-1][:,1] = tmp[:,0]
-
-    # %% plot kernels - both on last
-    # for i in range(nKernels-1):
-        # axes[i].plot(Kernels.times,Kernels[:,i],color='C%i'%i)
-        # axes[i].plot(Kernels.times,Kernels[:,i],color='k',lw=1)
-    # axes[-1].plot(Kernels.times,Kernels[:,-1],color='C%i'%(nKernels-1))
-    # axes[-1].plot(Kernels.times,Kernels[:,-1],color='k',lw=1)
-
-    fig, axes = plt.subplots(ncols=nEvents, figsize=[6,1.5])
+        max_sep[label,i] = sp.sum(sp.corrcoef(K.T))
 
     for i in range(len(candidate_kernels)):
         for j in range(candidate_kernels[i].shape[1]):
-            axes[i].plot(t_lags, candidate_kernels[i][:,j], alpha=0.75, color='C%i'%(i+j),lw=2)
+            axes[label,i].plot(t_lags, candidate_kernels[i][:,j], alpha=0.75, color='C%i'%(i+j),lw=2)
 
-    for ax in axes:
-        ax.axvline(0,linestyle=':',color='k',alpha=0.5)
-        ax.set_xlabel('time (s)')
+for ax in axes:
+    ax.axvline(0,linestyle=':',color='k',alpha=0.5)
+    ax.set_xlabel('time (s)')
 
-    sns.despine(fig)
-    axes[0].set_ylabel('au')
-    fig.suptitle('Kernels from label %i'%q)
-    fig.tight_layout()
-    fig.subplots_adjust(top=0.85)
-    fig.savefig('plots/RRR_kernels.png')
+best_clusters = sp.argmin(max_sep,axis=0)
+for i in range(nEvents):
+    axes[best_clusters[i],i].set_facecolor('lightgray')
 
-    ck.append(candidate_kernels)
+sns.despine(fig)
+# axes[0].set_ylabel('au')
+# fig.suptitle('Kernels from label %i'%q)
+fig.tight_layout()
+fig.subplots_adjust(top=0.85)
+# fig.savefig('plots/RRR_kernels.png')
+
+# ck.append(candidate_kernels)
+
+
+
+
+
+
+
+
+
+
+
+
+
+# %% rerun the above on clusters?
+
+ck = []
+l = copy(L[1:])
+LatF = np.array(np.split(l,nEvents,0)).swapaxes(0,1)
+
+candidate_kernels = []
+for i in range(nEvents):
+    D = LatF[:,i,:]
+    r_est = pca_rank_est(D, 0.99)
+
+    # iterate over clusters
+    for label in sp.unique(labels):
+        candidate_kernels_cluster = [] # will be list arrays (nLags x r_est)
+
+        # this needs proper description
+        R = D @ W[:,labels==label]
+        P = low_rank_approx(R.T, r_est)[0]
+        K = R @ linalg.pinv(P.T)
+
+        # peak invert if negative
+        for j in range(K.shape[1]):
+            if K[:,j].max() < np.absolute(K[:,j]).max():
+                K[:,j] *= -1
+
+        # normalize all
+        for j in range(K.shape[1]):
+            K[:,j] /= K[:,j].max()
+
+        candidate_kernels_cluster.append(K)
+    candidate_kernels.append(candidate_kernels_cluster)
+    
+# %%
+for i in range(nEvents):
+    for j in range(nClusters):
+        print(i,candidate_kernels[i].shape[1])
+
+# %%    
+
+fig, axes = plt.subplots(ncols=nEvents, figsize=[6,1.5])
+
+for i in range(len(candidate_kernels)):
+    for j in range(candidate_kernels[i].shape[1]):
+        axes[i].plot(t_lags, candidate_kernels[i][:,j], alpha=0.75, color='C%i'%(i+j),lw=2)
+
+for ax in axes:
+    ax.axvline(0,linestyle=':',color='k',alpha=0.5)
+    ax.set_xlabel('time (s)')
+
+sns.despine(fig)
+axes[0].set_ylabel('au')
+fig.suptitle('Kernels from label %i'%q)
+fig.tight_layout()
+fig.subplots_adjust(top=0.85)
+fig.savefig('plots/RRR_kernels.png')
+
+ck.append(candidate_kernels)
 
 
 # %%

@@ -12,11 +12,13 @@ def LM(Y, X, lam=0):
     Y_hat = X @ B_hat
     return B_hat
     
-def Rss(Y, Y_hat):
-    """ evaluate model error """
+def Rss(Y, Y_hat, normed=True):
+    """ evaluate (normalized) model error """
     e = Y_hat - Y
     Rss = np.trace(e.T @ e)
-    return Rss/Y.shape[0]
+    if normed:
+        Rss /= Y.shape[0]
+    return Rss
 
 def low_rank_approx(A, r, mode='left'):
     """ calculate low rank approximation of matrix A and 
@@ -35,9 +37,9 @@ def low_rank_approx(A, r, mode='left'):
     
     return L, W
 
-def RRR(Y, X, B_hat, r):
+def RRR(Y, X, B_hat, r, mode='left'):
     """ reduced rank regression by low rank approx of B_hat """
-    L, W = low_rank_approx(B_hat,r)
+    L, W = low_rank_approx(B_hat,r, mode=mode)
     B_hat_lr = L @ W
     Y_hat_lr = X @ B_hat_lr
     return B_hat_lr
